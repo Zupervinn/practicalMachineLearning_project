@@ -2,7 +2,7 @@
 title: "Practical Machine Learning - Prediction"
 author: "Vincent Phan"
 date: "December 24, 2015"
-output: html_document
+output: pdf_document
 ---
 
 ##Executive Summary
