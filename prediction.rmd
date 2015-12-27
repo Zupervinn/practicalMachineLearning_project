@@ -1,0 +1,128 @@
+---
+title: "Practical Machine Learning - Prediction"
+author: "Vincent Phan"
+date: "December 24, 2015"
+output: html_document
+---
+
+##Executive Summary
+In this report, we will be applying machine learning algorithms to predict our desired outcomes. The data set we will be analyzing is collected by Groupware@LES. This data set is generated using an accelerometers placed on the participant's belt, forearm, arm, and the dumbbell while performing a unilateral dumbbell bicep curl in five different fashions. More detail of this experiment can be found [here](http://groupware.les.inf.puc-rio.br/har).  
+
+The goal of this report is to predict the manner in which the participant performed the exercise(classe). **Note that this report is fully reproducible**
+
+####Loading packages
+```{r, warning=FALSE, results='hide', message=FALSE}
+library(dplyr); library(caret); library(rattle)
+```
+
+####Reading orignal training & testing data set provided
+```{r, cache=TRUE}
+training_data <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+testing_data<- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+
+#changing all blanks to NAs
+training_data[training_data ==""] <- NA
+```
+
+
+####Quick Exploratory Data Analysis
+This data set contains 159 variables we can use to predict classe with. Not all variables will be useful to make predictions as it will increase processing time. The **Cleaning Data** section show how to eliminate those unwanted variables.
+```{r}
+dim(training_data)
+```
+
+
+####Data Splitting  
+During test phrase, I had created a model based on splitting **training_data** into 70% training and 30% training. Doing this had increased the accuracy by 1.15% (99.71% vs 98.56% below); However, doing this had increased processing time exponentially. I will be sacrificing accuracy for speed. Also, the 1.15% decrease in accuracy proved to be insignificant when predicting the **testing_data** set.
+
+Below, we will divide the data into 33%. With this 33%(total 6479 observation vs before 19622), we will create a training set with 70% of the data.
+
+```{r}
+set.seed(777)
+inTrain <- createDataPartition(training_data$classe, p=0.33, list=FALSE)
+training <- training_data[inTrain, ]
+dim(training)
+
+set.seed(777)
+inTrain1 <- createDataPartition(training$classe, p=.7, list=FALSE)
+train1 <- training[inTrain1,]
+test1 <- training[-inTrain1,]
+dim(train1); dim(test1)
+```
+
+#### Cleaning Data  
+* Using function nearZeroVar(), we can remove any predictor variables with variances close to 0.  
+* We will be removing any variables that contains 75% or more of NA.  
+* The 1st 5 variables seems to be irrelevant (time stamp, names & etc), we will be removing those as well.
+
+```{r}
+nearzero <- nearZeroVar(train1)
+train1 <- train1[,-nearzero]
+
+NAs <- sapply(train1, function(x) mean(is.na(x))) > 0.75
+train1<- train1[,NAs==FALSE]
+
+train1 <- train1[,-(1:5)]
+dim(train1)
+
+```
+
+#### Training our data with different machine learning models
+* We will be training our data with 3 different machine learning models: Random Forest(rf), Recursive Partitioning and Regression Trees(Rpart), and Learning Vector Quantization(LVQ). 
+* We will be pre-processing the data within the train function. Our data will be "center" and "scale" to optimize performance. 
+* We will be using simple cross validation with 4 folds.
+```{r, cache=TRUE, warning=FALSE, message=FALSE}
+#RF Model
+train1fit <- train(classe ~. ,data=train1, preProcess=c("center", "scale"),method="rf", trControl=trainControl(method = "cv", number = 4))
+predict_test1 <- predict(train1fit, test1)
+
+#LVQ Model
+fit_lvq <- train(classe~. , data=train1, method ="lvq", trControl=trainControl(method = "cv", number = 4))
+predict_test1_lvq <- predict(fit_lvq, test1)
+
+
+#Rpart Model
+
+fit_rpart <- train(classe~. , data=train1, method = "rpart", trControl=trainControl(method = "cv", number = 4))
+predict_test1_rpart <- predict(fit_rpart, test1)
+
+```
+
+#### Comparing and selecting best model
+Random Forest Model proved to be highly accurate compared to the other 2 machine learning models: Max 98.50% compares to 56.17% and 56.78%. We will be using this method to predict our outcome in the test data set.
+```{r}
+results <- resamples(list(rf=train1fit, lvq=fit_lvq, Rpart=fit_rpart))
+summary(results)
+bwplot(results)
+```
+
+#### Look at our best model
+* 500 trees
+* 27 variables at each split
+* 1.45% OOB estimated of error rate
+* Looking at the plot, 200-300 trees is sufficent when building this model. [Click here for plot](http://i65.tinypic.com/29x85qb.png) http://i65.tinypic.com/29x85qb.png. The error rate seems to be flatting out between 200-300 trees. If we need to retrain our data, reducing the number of trees to 200-300 will help decrease processing time.( I could not get rmd to embed an image so I had included a link for the plot if you wish to review VIA tinypic.)
+
+```{r}
+train1fit
+```
+
+#### Predicting our test1 data set with our best model
+With our best model, our accuracy rate is 98.56%. 
+```{r}
+pred <- predict(train1fit, test1)
+confusionMatrix(pred, test1$classe)
+```
+
+####Out of sample error
+Our out-of-sample error is 1.44% (1-.9856). This model is highly accurate and we will be using this to predict our final final test set: **testing_data**.
+
+```{r}
+predict_testing_data<- as.character(predict(train1fit, testing_data))
+predict_testing_data
+```
+
+##Result
+The model that was built using random forest machine learning model proved to be highly accurate. I had submitted the homework assignment with 100% result. Thank you for reading.
+
+
+
